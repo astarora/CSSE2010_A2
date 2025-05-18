@@ -39,6 +39,9 @@ ElevatorFloor current_position;
 ElevatorFloor destination;
 bool traveller_present = false;
 ElevatorFloor traveller_floor = UNDEF_FLOOR;
+ElevatorFloor traveller_dest = UNDEF_FLOOR;
+
+
 
 
 
@@ -53,19 +56,24 @@ void draw_elevator(void);
 void draw_floors(void);
 void draw_traveller(void);
 
+
 /* Main */
 
 int main(void) {
 	// Setup hardware and call backs. This will turn on 
 	// interrupts.
 	initialise_hardware();
-	
+
 	// Show the splash screen message. Returns when display is complete
 	start_screen();
-	
+
 	// Start elevator controller software
 	start_elevator_emulator();
+
+	
 }
+
+
 
 /* Internal Function Definitions */
 
@@ -75,7 +83,7 @@ int main(void) {
  * @retval none
 */
 void initialise_hardware(void) {
-	
+
 	ledmatrix_setup();
 	init_button_interrupts();
 	// Setup serial port for 19200 baud communication with no echo
@@ -84,16 +92,21 @@ void initialise_hardware(void) {
 
 	//Port D
 	//S2 for controlling speed
-	DDRD &= ~( 1 << PD5);
-	PORTD |= (1 << PD5);
+	DDRD &= ~(( 1 << PD2)|(1 << PD3)|(1<<PD5)); // Set S2 and S1 as input
+	PORTD |= (1 << PD2)| (1 << PD3)|(1<<PD5); // Enable pull-up resistors on S2 and S1
 
 	//Port A
-	//SSD direction indicator set up
-	DDRA |= (1<<PA0)| (1<<PA1) | (1<<PA2);
-	
-	
+	//SSD direction indicator set up,output = 1
+	DDRA |= (1<<PA0)| (1<<PA1) | (1<<PA2)| (1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7); 
+	PORTA &= ~((1<<PA0)| (1<<PA1) | (1<<PA2)|(1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7)); 
+	// Set to off the SSD first then it can on by the order
+
+	//port c
+	DDRC |= (1<<PC7); //input = 0
+	PORTC &= ~(1<<PC7); // Set to off the SSD first then it can on by the order
+
 	init_timer0();
-	
+
 	// Turn on global interrupts
 	sei();
 }
@@ -116,16 +129,16 @@ void start_screen(void) {
 	_delay_ms(1000);
 	// Show start screen
 	start_display();
-	
+
 	// Animation variables
 	uint32_t doors_frame_time = 0;
 	uint32_t interval_delay = 150;
 	uint8_t frame = 0;
 	uint8_t doors_opening_closing = 1; // 1 => opening, 0 => closing
-	
+
 	// Wait until a button is pressed, or 's' is pressed on the terminal
 	while(1) {
-		
+
 		// Don't worry about this if/else tree. Its purely for animating
 		// the elevator doors on the start screen
 		if (get_current_time() - doors_frame_time  > interval_delay) {
@@ -143,7 +156,7 @@ void start_screen(void) {
 				if (frame == 0) doors_opening_closing = 1;
 			}
 		}
-	
+
 		// First check for if a 's' is pressed
 		// There are two steps to this
 		// 1) collect any serial input (if available)
@@ -172,23 +185,25 @@ void start_screen(void) {
 
 //the function for showing the direction by the segment of SSD
 void SSD_direction (char segment){
-	PORTA &= ~((1<<PA0)| (1<<PA1) | (1<<PA2));//set to off the SSD first then it can on by the order
+	PORTA &= ~((1<<PA0)| (1<<PA3) | (1<<PA6));//set to off the SSD first then it can on by the order
+	PORTC |= (1<<PC7); //set to off the SSD first then it can on by the order
 	if (segment == 'a'){
 		PORTA |= (1<<PA0);
 	}else if(segment == 'd'){
-		PORTA |= (1<<PA1);
+		PORTA |= (1<<PA3);
 	}else if (segment == 'g') {
-        PORTA |= (1 << PA2);
+        PORTA |= (1 << PA6);
 	}
 }
+
 void start_elevator_emulator(void) {
-	
+
 	// Clear the serial terminal
 	clear_terminal();
-	
+
 	// Initialise Display
 	initialise_display();
-	
+
 	// Clear a button push or serial input if any are waiting
 	// (The cast to void means the return value is ignored.)
 	(void)button_pushed();
@@ -196,17 +211,17 @@ void start_elevator_emulator(void) {
 
 	// Initialise local variables
 	time_since_move = get_current_time();
-	
+
 	// Draw the floors and elevator
 	draw_elevator();
 	draw_floors();
-	
+
 	current_position = FLOOR_0;
 	destination = FLOOR_0;
 	uint16_t move_delay_ms = 200;
-	
+
 	while(true) {
-		
+
 		//changing the speed by S2
 		if(PIND & (1 << PD5)){
 			move_delay_ms = 100;
@@ -216,27 +231,27 @@ void start_elevator_emulator(void) {
 
 		// Only update the elevator every 200 ms
 		if (get_current_time() - time_since_move > move_delay_ms) {	
-			
+
 			// Adjust the elevator based on where it needs to go
 			if (destination - current_position > 0) { // Move up
 				current_position++;
 			} else if (destination - current_position < 0) { // Move down
 				current_position--;
 			}
-			
+
 			// As we have potentially changed the elevator position, lets redraw it
 			draw_elevator();
 			if (traveller_present && current_position == traveller_floor) {
     		update_square_colour(4, current_position + 1, EMPTY_SQUARE); // remove traveller
-   	 		destination = FLOOR_0; // go to ground
+			destination = traveller_dest; // set destination to traveller's destination
 			}
 
 			//traveller movement condition
-			if (traveller_present && current_position == FLOOR_0 && destination == FLOOR_0) {
+			if (traveller_present && current_position == traveller_dest && destination == traveller_dest) {
     		traveller_present = false;
     		traveller_floor = UNDEF_FLOOR;
 			}
-			
+
 			// print the direction of movement
 			move_terminal_cursor(10, 14);
 			printf_P(PSTR("Current floor: %d  "), current_position / 4);
@@ -253,10 +268,10 @@ void start_elevator_emulator(void) {
 				SSD_direction('g');
 			}
 
-			
+
 			time_since_move = get_current_time(); // Reset delay until next movement update
 		}
-		
+
 		// Handle any button or key inputs
 		handle_inputs();
 	}
@@ -267,6 +282,8 @@ void start_elevator_emulator(void) {
  * @arg none
  * @retval none
 */
+
+
 void draw_floors(void) {
 	for (uint8_t i = 0; i < WIDTH; i++) {
 		update_square_colour(i, FLOOR_0, FLOOR);
@@ -282,12 +299,12 @@ void draw_floors(void) {
  * @retval none
 */
 void draw_elevator(void) {
-	
+
 	// Store where it used to be with old_position
 	static uint8_t old_position; // static variables maintain their value, every time the function is called
-	
+
 	int8_t y = 0; // Height position to draw elevator (i.e. y axis)
-	
+
 	// Clear where the elevator was
 	if (old_position > current_position) { // Elevator going down - clear above
 		y = old_position + 3;
@@ -299,7 +316,7 @@ void draw_elevator(void) {
 		update_square_colour(2, y, EMPTY_SQUARE);
 	}
 	old_position = current_position;
-	
+
 	// Draw a 2x3 block representing the elevator
 	for (uint8_t i = 1; i <= 3; i++) { // 3 is the height of the elevator sprite on the LED matrix
 		y = current_position + i; // Adds current floor position to i=1->3 to draw elevator as 3-high block
@@ -317,8 +334,11 @@ void draw_elevator(void) {
  * @arg none
  * @retval none
 */
+
+
+
 void handle_inputs(void) {
-	
+
 	/* ******** START HERE ********
 	
 	 The following code handles moving the elevator using the buttons on the
@@ -334,33 +354,129 @@ void handle_inputs(void) {
 	
 	*/
 	
+	
 	// We need to check if any button has been pushed
 
-	// button control and moving the traveller
+	// button control and moving the traveller#1 & 2 
 	uint8_t btn = button_pushed();
+	
 	if (!traveller_present) {
-        if (btn == BUTTON0_PUSHED) {
-            traveller_present = true;
-            traveller_floor = FLOOR_0;
-            destination = FLOOR_0;
-            update_square_colour(4, FLOOR_0 + 1, TRAVELLER_TO_0);
-        } else if (btn == BUTTON1_PUSHED) {
-            traveller_present = true;
-            traveller_floor = FLOOR_1;
-            destination = FLOOR_1;
-            update_square_colour(4, FLOOR_1 + 1, TRAVELLER_TO_0);
-        } else if (btn == BUTTON2_PUSHED) {
-            traveller_present = true;
-            traveller_floor = FLOOR_2;
-            destination = FLOOR_2;
-            update_square_colour(4, FLOOR_2 + 1, TRAVELLER_TO_0);
-        } else if (btn == BUTTON3_PUSHED) {
-            traveller_present = true;
-            traveller_floor = FLOOR_3;
-            destination = FLOOR_3;
-            update_square_colour(4, FLOOR_3 + 1, TRAVELLER_TO_0);
-        }
-    }
+		uint8_t s0 = (PIND >> PD3) & 1;
+		uint8_t s1 = (PIND >> PD2) & 1;
+		uint8_t dest = (s1 << 1) | s0;
+		ElevatorFloor dest_floor = dest * 4;
+		
+
+		if(!traveller_present){
+			if (dest ==0){
+				if (btn == BUTTON0_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_0;
+					traveller_dest = dest_floor;
+					destination = FLOOR_0;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
+				}else if (btn == BUTTON1_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_1;
+					traveller_dest = dest_floor;
+					destination = FLOOR_1;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
+				}else if (btn == BUTTON2_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_2;
+					traveller_dest = dest_floor;
+					destination = FLOOR_2;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
+				}else if (btn == BUTTON3_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_3;
+					traveller_dest = dest_floor;
+					destination = FLOOR_3;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
+				}
+			}else if (dest == 1){
+				if (btn == BUTTON0_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_0;
+					traveller_dest = dest_floor;
+					destination = FLOOR_0;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
+				}else if (btn == BUTTON1_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_1;
+					traveller_dest = dest_floor;
+					destination = FLOOR_1;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
+				}else if (btn == BUTTON2_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_2;
+					traveller_dest = dest_floor;
+					destination = FLOOR_2;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
+				}else if (btn == BUTTON3_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_3;
+					traveller_dest = dest_floor;
+					destination = FLOOR_3;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
+				}
+			}else if (dest == 2){
+				if (btn == BUTTON0_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_0;
+					traveller_dest = dest_floor;
+					destination = FLOOR_0;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
+				}else if (btn == BUTTON1_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_1;
+					traveller_dest = dest_floor;
+					destination = FLOOR_1;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
+				}else if (btn == BUTTON2_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_2;
+					traveller_dest = dest_floor;
+					destination = FLOOR_2;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
+				}else if (btn == BUTTON3_PUSHED) {
+					traveller_present =true;
+					traveller_floor = FLOOR_3;
+					traveller_dest = dest_floor;
+					destination = FLOOR_3;
+					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
+				}
+			}else if (dest == 3){
+					if (btn == BUTTON0_PUSHED) {
+						traveller_present =true;
+						traveller_floor = FLOOR_0;
+						traveller_dest = dest_floor;
+						destination = FLOOR_0;
+						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
+					}else if (btn == BUTTON1_PUSHED) {
+						traveller_present =true;
+						traveller_floor = FLOOR_1;
+						traveller_dest = dest_floor;
+						destination = FLOOR_1;
+						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
+					}else if (btn == BUTTON2_PUSHED) {
+						traveller_present =true;
+						traveller_floor = FLOOR_2;
+						traveller_dest = dest_floor;
+						destination = FLOOR_2;
+						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
+					}else if (btn == BUTTON3_PUSHED) {
+						traveller_present =true;
+						traveller_floor = FLOOR_3;
+						traveller_dest = dest_floor;
+						destination = FLOOR_3;
+						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
+					}
+				
+					
+			}
+		}	
+	}
 
 	//control by keyboard
 	if(!traveller_present && serial_input_available()){
@@ -375,5 +491,4 @@ void handle_inputs(void) {
 		destination = FLOOR_3;
 		}
 	}
-
 }
