@@ -56,6 +56,7 @@ void init_timer0(void) {
 	TIFR0 &= (1<<OCF0A);
 }
 
+
 uint32_t get_current_time(void) {
 	uint32_t returnValue;
 

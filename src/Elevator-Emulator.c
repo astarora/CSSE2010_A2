@@ -40,6 +40,9 @@ ElevatorFloor destination;
 bool traveller_present = false;
 ElevatorFloor traveller_floor = UNDEF_FLOOR;
 ElevatorFloor traveller_dest = UNDEF_FLOOR;
+uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
+ElevatorFloor last_reached_floor = FLOOR_0; 
+#define SEG_DP (1 << PA7) 
 
 
 
@@ -55,6 +58,9 @@ void handle_inputs(void);
 void draw_elevator(void);
 void draw_floors(void);
 void draw_traveller(void);
+void SSD_direction (char segment);
+
+
 
 
 /* Main */
@@ -72,6 +78,7 @@ int main(void) {
 
 	
 }
+
 
 
 
@@ -95,16 +102,18 @@ void initialise_hardware(void) {
 	DDRD &= ~(( 1 << PD2)|(1 << PD3)|(1<<PD5)); // Set S2 and S1 as input
 	PORTD |= (1 << PD2)| (1 << PD3)|(1<<PD5); // Enable pull-up resistors on S2 and S1
 
+	DDRD |= (1<<PD6); // Set PD6 as output
+	
 	//Port A
 	//SSD direction indicator set up,output = 1
 	DDRA |= (1<<PA0)| (1<<PA1) | (1<<PA2)| (1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7); 
 	PORTA &= ~((1<<PA0)| (1<<PA1) | (1<<PA2)|(1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7)); 
 	// Set to off the SSD first then it can on by the order
 
-	//port c
-	DDRC |= (1<<PC7); //input = 0
-	PORTC &= ~(1<<PC7); // Set to off the SSD first then it can on by the order
-
+	//set the timer
+	OCR1A = 999;
+	TCCR1A = (0 << COM1A1) | (1 << COM1A0) | (0 << WGM11) | (0 << WGM10);
+	TCCR1B = (0 << WGM13) | (1 << WGM12) | (0 << CS12) | (1 << CS11) | (0 <<CS10);
 	init_timer0();
 
 	// Turn on global interrupts
@@ -196,6 +205,8 @@ void SSD_direction (char segment){
 	}
 }
 
+
+
 void start_elevator_emulator(void) {
 
 	// Clear the serial terminal
@@ -219,6 +230,8 @@ void start_elevator_emulator(void) {
 	current_position = FLOOR_0;
 	destination = FLOOR_0;
 	uint16_t move_delay_ms = 200;
+	static uint8_t digit = 0;
+	
 
 	while(true) {
 
@@ -239,6 +252,11 @@ void start_elevator_emulator(void) {
 				current_position--;
 			}
 
+			if (current_position == FLOOR_0 || current_position == FLOOR_1 ||
+				current_position == FLOOR_2 || current_position == FLOOR_3) {
+				last_reached_floor = current_position;
+			}
+
 			// As we have potentially changed the elevator position, lets redraw it
 			draw_elevator();
 			if (traveller_present && current_position == traveller_floor) {
@@ -252,6 +270,8 @@ void start_elevator_emulator(void) {
     		traveller_floor = UNDEF_FLOOR;
 			}
 
+
+				
 			// print the direction of movement
 			move_terminal_cursor(10, 14);
 			printf_P(PSTR("Current floor: %d  "), current_position / 4);
@@ -259,13 +279,13 @@ void start_elevator_emulator(void) {
 			move_terminal_cursor(10,15);
 			if(destination - current_position >0){
 				printf_P(PSTR("Direction: Up       "));
-				SSD_direction('a');
+				
 			}else if(destination - current_position < 0){
 				printf_P(PSTR("Direction: Down      "));
-				SSD_direction('d');
+				
 			}else{
 				printf_P(PSTR("Direction: Stationary"));
-				SSD_direction('g');
+				
 			}
 
 
@@ -274,8 +294,45 @@ void start_elevator_emulator(void) {
 
 		// Handle any button or key inputs
 		handle_inputs();
+		// Determine direction and call SSD_direction with appropriate argument
+		
+	
+
+
+		DDRC = 1 << 7;
+		//ssd display
+		if(TIFR1 & (1 << OCF1A)){
+			TIFR1 |= (1 << OCF1A);
+			PORTA = 0;
+			PORTC &= ~(1 << PC7);
+
+			if (digit == 0){
+				PORTC &= ~(1 << PC7);
+				uint8_t floor = last_reached_floor /4;
+				uint8_t seg = seven_seg[floor];
+				if (current_position != FLOOR_0 && current_position != FLOOR_1 &&
+					current_position != FLOOR_2 && current_position != FLOOR_3) {
+					seg |= SEG_DP;
+				}
+				PORTA = seg;
+				
+			} else {
+				PORTC |= (1 << PC7); 
+				uint8_t seg = 0;
+				if (destination > current_position) {
+					seg = (1 << PA0);
+				} else if (destination < current_position) {
+					seg = (1 << PA3);
+				} else {
+					seg = (1 << PA6);
+				}
+				PORTA = seg;		
+			}
+			digit = 1 - digit;
+		}
 	}
 }
+
 
 /**
  * @brief Draws 4 lines of "FLOOR" coloured pixels

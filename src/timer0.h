@@ -25,6 +25,8 @@
  */
 void init_timer0(void);
 
+
+
 /* Return the current clock tick value - milliseconds since the timer was
  * initialised.
  */
