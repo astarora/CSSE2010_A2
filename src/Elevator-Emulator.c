@@ -38,7 +38,7 @@ uint32_t time_since_move;
 ElevatorFloor current_position;
 ElevatorFloor destination;
 bool traveller_present = false;
-bool picking_up_traveller = false;
+bool traveller_picked = false;
 ElevatorFloor traveller_floor = UNDEF_FLOOR;
 ElevatorFloor traveller_dest = UNDEF_FLOOR;
 uint8_t with_traveller = 0;
@@ -258,7 +258,7 @@ void start_elevator_emulator(void) {
 			//terminal display 2
 			current_floor = current_position / 4;
 			if (current_floor != previous_floor) {
-				if (traveller_present) {
+				if (traveller_picked) { // use traveller picked up instead
 					with_traveller++;
 				} else {
 					without_traveller++;
@@ -275,8 +275,8 @@ void start_elevator_emulator(void) {
 			draw_elevator();
 			if (traveller_present && current_position == traveller_floor) {
     		update_square_colour(4, current_position + 1, EMPTY_SQUARE); // remove traveller
-			destination = traveller_dest;// set destination to traveller's destination
-			picking_up_traveller = true; 
+			destination = traveller_dest; // set destination to traveller's destination
+			traveller_picked = true;// traveller picked up = true
 			}
 
 			//traveller movement condition
@@ -322,7 +322,7 @@ void start_elevator_emulator(void) {
 
 
 		DDRC = 1 << 7;
-		//ssd display
+		//ssd display#2
 		if(TIFR1 & (1 << OCF1A)){
 			TIFR1 |= (1 << OCF1A);
 			PORTA = 0;
@@ -448,123 +448,125 @@ void handle_inputs(void) {
 
 		if(!traveller_present){
 			if (dest ==0){
+				traveller_present = false;
 				if (btn == BUTTON0_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					traveller_picked = false;// set traveller picked up = false
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON1_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON2_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON3_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
 					destination = FLOOR_3;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}
 			}else if (dest == 1){
+				traveller_present = false;
 				if (btn == BUTTON0_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON1_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON2_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON3_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
 					destination = FLOOR_3;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}
 			}else if (dest == 2){
 				if (btn == BUTTON0_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}else if (btn == BUTTON1_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}else if (btn == BUTTON2_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}else if (btn == BUTTON3_PUSHED) {
 					traveller_present =true;
+					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
 					destination = FLOOR_3;
-					picking_up_traveller = true;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}
 			}else if (dest == 3){
 					if (btn == BUTTON0_PUSHED) {
 						traveller_present =true;
+						traveller_picked = false;
 						traveller_floor = FLOOR_0;
 						traveller_dest = dest_floor;
 						destination = FLOOR_0;
-						picking_up_traveller = true;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON1_PUSHED) {
 						traveller_present =true;
+						traveller_picked = false;
 						traveller_floor = FLOOR_1;
 						traveller_dest = dest_floor;
 						destination = FLOOR_1;
-						picking_up_traveller = true;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON2_PUSHED) {
 						traveller_present =true;
+						traveller_picked = false;
 						traveller_floor = FLOOR_2;
 						traveller_dest = dest_floor;
 						destination = FLOOR_2;
-						picking_up_traveller = true;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON3_PUSHED) {
 						traveller_present =true;
+						traveller_picked = false;
 						traveller_floor = FLOOR_3;
 						traveller_dest = dest_floor;
 						destination = FLOOR_3;
-						picking_up_traveller = true;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}
 				
