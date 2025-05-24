@@ -45,7 +45,15 @@ uint8_t with_traveller = 0;
 uint8_t without_traveller = 0;
 uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
 ElevatorFloor last_reached_floor = FLOOR_0; 
-#define SEG_DP (1 << PA7) 
+#define SEG_DP (1 << PA7);
+
+uint16_t freq_to_clock_period(uint16_t freq){
+	return (1000000UL / freq);
+}
+
+uint16_t duty_cycle_to_pulse_width(float duty_cycle, uint16_t clockperiod){
+	return (duty_cycle * clockperiod) / 100;
+}
 
 
 
@@ -63,7 +71,14 @@ void draw_floors(void);
 void draw_traveller(void);
 void SSD_direction (char segment);
 
+// Add prototype for play_tone_500Hz_100ms
+void play_tone_500Hz_100ms(void);
 
+void delay_ms_variable(uint16_t ms) {
+	while(ms--) {
+		_delay_ms(1);  // 每次延迟1ms
+	}
+}
 
 
 /* Main */
@@ -277,11 +292,13 @@ void start_elevator_emulator(void) {
     		update_square_colour(4, current_position + 1, EMPTY_SQUARE); // remove traveller
 			destination = traveller_dest; // set destination to traveller's destination
 			traveller_picked = true;// traveller picked up = true
+			play_tone_500Hz_100ms();
 			}
 
 			//traveller movement condition
 			if (traveller_present && current_position == traveller_dest && destination == traveller_dest) {
     		traveller_present = false;
+			play_tone_500Hz_100ms();
     		traveller_floor = UNDEF_FLOOR;
 			}
 
@@ -291,7 +308,7 @@ void start_elevator_emulator(void) {
 				
 			// print the direction of movement
 			move_terminal_cursor(10, 14);
-			printf_P(PSTR("Current floor: %d  "), current_position / 4);
+			printf_P(PSTR("Last floor reached: %d  "), current_position / 4);
 
 			move_terminal_cursor(10,15);
 			if(destination - current_position >0){
@@ -361,6 +378,39 @@ void start_elevator_emulator(void) {
  * @arg none
  * @retval none
 */
+
+void play_tone_pwm(uint16_t freq, uint16_t duration_ms){
+	//modify
+	float dutycycle = 10; //%
+	uint16_t clockperiod = freq_to_clock_period(freq);
+	uint16_t pulsewidth = duty_cycle_to_pulse_width(dutycycle, clockperiod);
+	
+	//set up
+	DDRD |= (1<<PD4); //output =1
+	TCCR1A = (1 << COM1B1) | (0 <<COM1B0) | (1 <<WGM11) | (1 << WGM10);//clear on compare match
+	TCCR1B = (1 << WGM13) | (1 << WGM12) | (0 << CS12) | (1 << CS11) | (0 << CS10);//fast PWM & clk/8
+
+	OCR1A = clockperiod - 1; //start to count from 0, so -1
+	OCR1B = (pulsewidth > 0) ? (pulsewidth - 1) : 0;
+	delay_ms_variable(duration_ms);
+
+	//stop PWM
+	TCCR1A = 0;
+	TCCR1B = 0;
+	PORTD &= ~(1 << PD4);
+}
+
+
+void play_tone_3kHz_50ms() {
+	play_tone_pwm(3000, 50);//set freq = 3KHz, duration of an operation:50ms
+}
+//traveller_present = true
+
+
+void play_tone_500Hz_100ms() {
+	play_tone_pwm(500, 100);//set freq = 500Hz, duration of an operation:100ms
+}// traveller_picked and drop of = traveller_present false
+
 
 
 void draw_floors(void) {
@@ -450,28 +500,30 @@ void handle_inputs(void) {
 			if (dest ==0){
 				traveller_present = false;
 				if (btn == BUTTON0_PUSHED) {
-					traveller_present = true;
+					traveller_present = false;
 					traveller_picked = false;// set traveller picked up = false
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
-					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON1_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON2_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_0);
 				}else if (btn == BUTTON3_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
@@ -481,28 +533,30 @@ void handle_inputs(void) {
 			}else if (dest == 1){
 				traveller_present = false;
 				if (btn == BUTTON0_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON1_PUSHED) {
-					traveller_present =true;
+					traveller_present = false;
 					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
-					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON2_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_1);
 				}else if (btn == BUTTON3_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
@@ -511,28 +565,31 @@ void handle_inputs(void) {
 				}
 			}else if (dest == 2){
 				if (btn == BUTTON0_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_0;
 					traveller_dest = dest_floor;
 					destination = FLOOR_0;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}else if (btn == BUTTON1_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_1;
 					traveller_dest = dest_floor;
 					destination = FLOOR_1;
 					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
 				}else if (btn == BUTTON2_PUSHED) {
-					traveller_present =true;
+					traveller_present = false;
 					traveller_picked = false;
 					traveller_floor = FLOOR_2;
 					traveller_dest = dest_floor;
 					destination = FLOOR_2;
-					update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_2);
+
 				}else if (btn == BUTTON3_PUSHED) {
-					traveller_present =true;
+					traveller_present = true;
+					play_tone_3kHz_50ms();
 					traveller_picked = false;
 					traveller_floor = FLOOR_3;
 					traveller_dest = dest_floor;
@@ -541,33 +598,35 @@ void handle_inputs(void) {
 				}
 			}else if (dest == 3){
 					if (btn == BUTTON0_PUSHED) {
-						traveller_present =true;
+						traveller_present = true;
+						play_tone_3kHz_50ms();
 						traveller_picked = false;
 						traveller_floor = FLOOR_0;
 						traveller_dest = dest_floor;
 						destination = FLOOR_0;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON1_PUSHED) {
-						traveller_present =true;
+						traveller_present = true;
+						play_tone_3kHz_50ms();
 						traveller_picked = false;
 						traveller_floor = FLOOR_1;
 						traveller_dest = dest_floor;
 						destination = FLOOR_1;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON2_PUSHED) {
-						traveller_present =true;
+						traveller_present = true;
+						play_tone_3kHz_50ms();
 						traveller_picked = false;
 						traveller_floor = FLOOR_2;
 						traveller_dest = dest_floor;
 						destination = FLOOR_2;
 						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}else if (btn == BUTTON3_PUSHED) {
-						traveller_present =true;
+						traveller_present = false;
 						traveller_picked = false;
 						traveller_floor = FLOOR_3;
 						traveller_dest = dest_floor;
 						destination = FLOOR_3;
-						update_square_colour(4, traveller_floor + 1, TRAVELLER_TO_3);
 					}
 				
 					
