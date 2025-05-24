@@ -129,9 +129,10 @@ void initialise_hardware(void) {
 	// Set to off the SSD first then it can on by the order
 
 	//set the timer
-	OCR1A = 999;
-	TCCR1A = (0 << COM1A1) | (1 << COM1A0) | (0 << WGM11) | (0 << WGM10);
-	TCCR1B = (0 << WGM13) | (1 << WGM12) | (0 << CS12) | (1 << CS11) | (0 <<CS10);
+	OCR2A = 124;
+	TCCR2A = (0 << COM2A1) | (1 << COM2A0) | (1 << WGM11) | (0 << WGM10);
+	TCCR2B = (0 << WGM12) | (0 << CS22) | (1 << CS21) | (1 <<CS20);
+	
 	init_timer0();
 
 	// Turn on global interrupts
@@ -340,8 +341,8 @@ void start_elevator_emulator(void) {
 
 		DDRC = 1 << 7;
 		//ssd display#2
-		if(TIFR1 & (1 << OCF1A)){
-			TIFR1 |= (1 << OCF1A);
+		if(TIFR2 &= (1<<OCF2A)){
+			TIFR2 |= (1 << OCF2A);
 			PORTA = 0;
 			PORTC &= ~(1 << PC7);
 
@@ -379,6 +380,7 @@ void start_elevator_emulator(void) {
  * @retval none
 */
 
+// sound effects
 void play_tone_pwm(uint16_t freq, uint16_t duration_ms){
 	//modify
 	float dutycycle = 10; //%
