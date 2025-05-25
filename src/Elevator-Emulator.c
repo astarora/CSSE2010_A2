@@ -45,7 +45,7 @@ uint8_t with_traveller = 0;
 uint8_t without_traveller = 0;
 uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
 ElevatorFloor last_reached_floor = FLOOR_0; 
-#define SEG_DP (1 << PA7);
+#define SEG_DP (1 << PC6);
 
 uint16_t freq_to_clock_period(uint16_t freq){
 	return (1000000UL / freq);
