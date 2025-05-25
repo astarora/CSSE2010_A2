@@ -70,10 +70,8 @@ void draw_elevator(void);
 void draw_floors(void);
 void draw_traveller(void);
 void SSD_direction (char segment);
-
-// Add prototype for play_tone_500Hz_100ms
 void play_tone_500Hz_100ms(void);
-
+void door_animation(void);
 void delay_ms_variable(uint16_t ms) {
 	while(ms--) {
 		_delay_ms(1);  // 每次延迟1ms
@@ -120,7 +118,7 @@ void initialise_hardware(void) {
 	DDRD &= ~(( 1 << PD2)|(1 << PD3)|(1<<PD5)); // Set S2 and S1 as input
 	PORTD |= (1 << PD2)| (1 << PD3)|(1<<PD5); // Enable pull-up resistors on S2 and S1
 
-	DDRD |= (1<<PD6); // Set PD6 as output
+	DDRD |= (1<<PD6); // Set PD6 as output 
 	
 	//Port A
 	//SSD direction indicator set up,output = 1
@@ -128,7 +126,15 @@ void initialise_hardware(void) {
 	PORTA &= ~((1<<PA0)| (1<<PA1) | (1<<PA2)|(1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7)); 
 	// Set to off the SSD first then it can on by the order
 
-	//set the timer
+	//Port C
+	//L0 - L3 connect to the C0 - C3, output, DDRC = 1
+	DDRC |= (1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3);
+	PORTC &= ~((1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3));
+
+	OCR1A = 999;
+	TCCR1A = (0 << COM1A1) | (1 << COM1A0) | (0 << WGM11) | (0 << WGM10);
+	TCCR1B = (0 << WGM13) | (1 << WGM12) | (0 << CS12) | (1 << CS11) | (0 <<CS10);
+	//set the timer2
 	OCR2A = 124;
 	TCCR2A = (0 << COM2A1) | (1 << COM2A0) | (1 << WGM11) | (0 << WGM10);
 	TCCR2B = (0 << WGM12) | (0 << CS22) | (1 << CS21) | (1 <<CS20);
@@ -294,11 +300,13 @@ void start_elevator_emulator(void) {
 			destination = traveller_dest; // set destination to traveller's destination
 			traveller_picked = true;// traveller picked up = true
 			play_tone_500Hz_100ms();
+			door_animation();
 			}
 
 			//traveller movement condition
 			if (traveller_present && current_position == traveller_dest && destination == traveller_dest) {
     		traveller_present = false;
+			door_animation();
 			play_tone_500Hz_100ms();
     		traveller_floor = UNDEF_FLOOR;
 			}
@@ -413,6 +421,27 @@ void play_tone_500Hz_100ms() {
 	play_tone_pwm(500, 100);//set freq = 500Hz, duration of an operation:100ms
 }// traveller_picked and drop of = traveller_present false
 
+
+// run door animation
+void door_animation(void){
+	PORTC &= ~((1 << PC0)| (1 << PC3 ));
+	PORTC |= (1 << PC1) | (1 << PC2);
+	_delay_ms(400);
+
+	PORTC |= (1 << PC0)| (1 << PC3 );
+	PORTC &= ~((1 << PC1) | (1 << PC2));
+	_delay_ms(400);
+
+	PORTC &= ~((1 << PC0)| (1 << PC3 ));
+	PORTC |= (1 << PC1) | (1 << PC2);
+	_delay_ms(400);
+
+	PORTC &= ~((1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3));
+}
+
+// If a traveller is dropped off at the floor 
+//where the next traveller is waiting (assuming “Travel Queue” is implemented),
+//the above animation should only play once. 
 
 
 void draw_floors(void) {
