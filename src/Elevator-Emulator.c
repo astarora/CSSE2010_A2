@@ -45,7 +45,7 @@ uint8_t with_traveller = 0;
 uint8_t without_traveller = 0;
 uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
 ElevatorFloor last_reached_floor = FLOOR_0; 
-#define SEG_DP (1 << PC6);
+#define SEG_DP (1 << PC7);
 
 uint16_t freq_to_clock_period(uint16_t freq){
 	return (1000000UL / freq);
@@ -122,14 +122,14 @@ void initialise_hardware(void) {
 	
 	//Port A
 	//SSD direction indicator set up,output = 1
-	DDRA |= (1<<PA0)| (1<<PA1) | (1<<PA2)| (1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7); 
-	PORTA &= ~((1<<PA0)| (1<<PA1) | (1<<PA2)|(1<<PA3)| (1<<PA4) | (1<<PA5) | (1<<PA6) | (1<<PA7)); 
+	DDRC |= (1<<PC0)| (1<<PC1) | (1<<PC2)| (1<<PC3)| (1<<PC4) | (1<<PC5) | (1<<PC6) | (1<<PC7); 
+	PORTC &= ~((1<<PC0)| (1<<PC1) | (1<<PC2)|(1<<PC3)| (1<<PC4) | (1<<PC5) | (1<<PC6) | (1<<PC7)); 
 	// Set to off the SSD first then it can on by the order
 
 	//Port C
 	//L0 - L3 connect to the C0 - C3, output, DDRC = 1
-	DDRC |= (1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3);
-	PORTC &= ~((1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3));
+	DDRA |= (1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3);
+	PORTA &= ~((1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3));
 
 	OCR1A = 999;
 	TCCR1A = (0 << COM1A1) | (1 << COM1A0) | (0 << WGM11) | (0 << WGM10);
@@ -219,17 +219,16 @@ void start_screen(void) {
 
 //the function for showing the direction by the segment of SSD
 void SSD_direction (char segment){
-	PORTA &= ~((1<<PA0)| (1<<PA3) | (1<<PA6));//set to off the SSD first then it can on by the order
+	PORTC &= ~((1<<PC0)| (1<<PC3) | (1<<PC6));//set to off the SSD first then it can on by the order
 	PORTC |= (1<<PC7); //set to off the SSD first then it can on by the order
 	if (segment == 'a'){
-		PORTA |= (1<<PA0);
+		PORTC |= (1<<PC0);
 	}else if(segment == 'd'){
-		PORTA |= (1<<PA3);
+		PORTC |= (1<<PC3);
 	}else if (segment == 'g') {
-        PORTA |= (1 << PA6);
+        PORTC |= (1 << PC6);
 	}
 }
-
 
 
 void start_elevator_emulator(void) {
@@ -347,34 +346,34 @@ void start_elevator_emulator(void) {
 	
 
 
-		DDRC = 1 << 7;
+		DDRD = 1 << 6;
 		//ssd display#2
 		if(TIFR2 &= (1<<OCF2A)){
 			TIFR2 |= (1 << OCF2A);
-			PORTA = 0;
-			PORTC &= ~(1 << PC7);
+			PORTC = 0;
+			PORTD &= ~(1 << PD6);
 
 			if (digit == 0){
-				PORTC &= ~(1 << PC7);
+				PORTD &= ~(1 << PD6);
 				uint8_t floor = last_reached_floor /4;
 				uint8_t seg = seven_seg[floor];
 				if (current_position != FLOOR_0 && current_position != FLOOR_1 &&
 					current_position != FLOOR_2 && current_position != FLOOR_3) {
 					seg |= SEG_DP;
 				}
-				PORTA = seg;
+				PORTC = seg;
 				
 			} else {
-				PORTC |= (1 << PC7); 
+				PORTD |= (1 << PD6); 
 				uint8_t seg = 0;
 				if (destination > current_position) {
-					seg = (1 << PA0);
+					seg = (1 << PC0);
 				} else if (destination < current_position) {
-					seg = (1 << PA3);
+					seg = (1 << PC3);
 				} else {
-					seg = (1 << PA6);
+					seg = (1 << PC6);
 				}
-				PORTA = seg;		
+				PORTC = seg;		
 			}
 			digit = 1 - digit;
 		}
@@ -424,19 +423,19 @@ void play_tone_500Hz_100ms() {
 
 // run door animation
 void door_animation(void){
-	PORTC &= ~((1 << PC0)| (1 << PC3 ));
-	PORTC |= (1 << PC1) | (1 << PC2);
+	PORTA &= ~((1 << PA0)| (1 << PA3));
+	PORTA |= (1 << PA1) | (1 << PA2);
 	_delay_ms(400);
 
-	PORTC |= (1 << PC0)| (1 << PC3 );
-	PORTC &= ~((1 << PC1) | (1 << PC2));
+	PORTA |= (1 << PA0)| (1 << PA3);
+	PORTA &= ~((1 << PA1) | (1 << PA2));
 	_delay_ms(400);
 
-	PORTC &= ~((1 << PC0)| (1 << PC3 ));
-	PORTC |= (1 << PC1) | (1 << PC2);
+	PORTA &= ~((1 << PA0)| (1 << PA3));
+	PORTA |= (1 << PA1) | (1 << PA2);
 	_delay_ms(400);
 
-	PORTC &= ~((1<< PC0)| (1<<PC1) | (1<<PC2) |(1<<PC3));
+	PORTA &= ~((1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3));
 }
 
 // If a traveller is dropped off at the floor 
