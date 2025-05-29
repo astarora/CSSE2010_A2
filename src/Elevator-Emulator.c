@@ -176,7 +176,6 @@ void initialise_hardware(void) {
 //joystick service mode
 
 void joy_service(void) {//set up ADC
-	
 	static uint32_t last_move_time = 0;
 	uint32_t now = get_current_time();
 	ADMUX = (1 << REFS0) | (1 << MUX2);
@@ -235,7 +234,9 @@ void joy_service(void) {//set up ADC
 			last_reached_floor = current_position;
 			}
 		}
-    }
+    }else{
+		joystick_direction = 0;
+	}
 }
 
 
@@ -356,9 +357,9 @@ void start_elevator_emulator(void) {
 
 		// Only update the elevator every 200 ms
 		if (joystick_mode) {
-			update_joystick();
+			joy_service();
 			} else if (get_current_time() - time_since_move > move_delay_ms) {
-			// 正常模式：destination 控制
+			
 			if (destination > current_position) {
 				current_position++;
 			} else if (destination < current_position) {

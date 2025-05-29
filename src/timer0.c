@@ -111,7 +111,7 @@ ISR(TIMER0_COMPA_vect) {
 				seg = (1 << PC0);
 			} else if (joystick_direction < 0) {
 				seg = (1 << PC3);
-			} else {
+			} else{
 				seg = (1 << PC6);
 			}
 		} else {
