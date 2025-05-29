@@ -39,13 +39,19 @@ ElevatorFloor current_position;
 ElevatorFloor destination;
 bool traveller_present = false;
 bool traveller_picked = false;
+
+
+//joystick
+bool joystick_mode = false;
+int8_t joystick_direction = 0;
+
+
 ElevatorFloor traveller_floor = UNDEF_FLOOR;
 ElevatorFloor traveller_dest = UNDEF_FLOOR;
 uint8_t with_traveller = 0;
 uint8_t without_traveller = 0;
 uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
 ElevatorFloor last_reached_floor = FLOOR_0; 
-#define SEG_DP (1 << PC7);
 
 uint16_t freq_to_clock_period(uint16_t freq){
 	return (1000000UL / freq);
@@ -55,7 +61,12 @@ uint16_t duty_cycle_to_pulse_width(float duty_cycle, uint16_t clockperiod){
 	return (duty_cycle * clockperiod) / 100;
 }
 
-
+//for joystick
+uint16_t y_val;
+#define JOYSTICK_SLOW_UPPER   600
+#define JOYSTICK_FAST_UPPER   800
+#define JOYSTICK_SLOW_LOWER   400
+#define JOYSTICK_FAST_LOWER   200
 
 
 
@@ -97,7 +108,6 @@ int main(void) {
 
 
 
-
 /* Internal Function Definitions */
 
 /**
@@ -119,18 +129,23 @@ void initialise_hardware(void) {
 	PORTD |= (1 << PD2)| (1 << PD3)|(1<<PD5); // Enable pull-up resistors on S2 and S1
 
 	DDRD |= (1<<PD6); // Set PD6 as output 
-	
-	//Port A
+
+	//joystick
+	DDRD &= ~(1 << PD7);
+	PORTD |= (1 << PD7);
+
+	//Port C
 	//SSD direction indicator set up,output = 1
 	DDRC |= (1<<PC0)| (1<<PC1) | (1<<PC2)| (1<<PC3)| (1<<PC4) | (1<<PC5) | (1<<PC6) | (1<<PC7); 
 	PORTC &= ~((1<<PC0)| (1<<PC1) | (1<<PC2)|(1<<PC3)| (1<<PC4) | (1<<PC5) | (1<<PC6) | (1<<PC7)); 
 	// Set to off the SSD first then it can on by the order
 
-	//Port C
+	//Port A
 	//L0 - L3 connect to the C0 - C3, output, DDRC = 1
 	DDRA |= (1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3);
 	PORTA &= ~((1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3));
-
+	DDRA &= ~(1 << PA4);  // Set PA4 as input for joystick
+	PORTA &= ~(1 << PA4); 
 	OCR1A = 999;
 	TCCR1A = (0 << COM1A1) | (1 << COM1A0) | (0 << WGM11) | (0 << WGM10);
 	TCCR1B = (0 << WGM13) | (1 << WGM12) | (0 << CS12) | (1 << CS11) | (0 <<CS10);
@@ -140,6 +155,13 @@ void initialise_hardware(void) {
 	TCCR2B = (0 << WGM12) | (0 << CS22) | (1 << CS21) | (1 <<CS20);
 	
 	init_timer0();
+	// Set up ADC - AVCC reference, right adjust
+	ADMUX = (1<<REFS0);
+	// Turn on the ADC (but don't start a conversion yet). Choose a clock
+	// divider of 64. (The ADC clock must be somewhere
+	// between 50kHz and 200kHz. We will divide our 8MHz clock by 64
+	// to give us 125kHz.)
+	ADCSRA = (1<<ADEN)|(1<<ADPS2)|(1<<ADPS1);
 
 	// Turn on global interrupts
 	sei();
@@ -150,6 +172,73 @@ void initialise_hardware(void) {
  * @arg none
  * @retval none
 */
+
+//joystick service mode
+
+void joy_service(void) {//set up ADC
+	
+	static uint32_t last_move_time = 0;
+	uint32_t now = get_current_time();
+	ADMUX = (1 << REFS0) | (1 << MUX2);
+	ADCSRA |= (1 << ADSC);  
+	while(ADCSRA & (1<<ADSC)) {
+		; /* Wait until conversion finished */
+	}
+	y_val = ADC; // read the value
+
+
+
+	move_terminal_cursor(10, 5);
+	printf_P(PSTR("Joystick Y = %d   "), y_val); //debug
+
+	if (y_val > JOYSTICK_FAST_UPPER && current_position < FLOOR_3) {
+        if (now - last_move_time > 50) { // 50ms delay for fast
+            current_position++;
+            last_move_time = now;
+			joystick_direction = 1;
+			if (current_position % 4 == 0) {
+			last_reached_floor = current_position;
+			}
+        }
+    }
+    // Slow upward
+    else if (y_val > JOYSTICK_SLOW_UPPER && y_val <= JOYSTICK_FAST_UPPER && current_position < FLOOR_3) {
+        if (now - last_move_time > 200) { // 200ms delay for slow
+            current_position++;
+            last_move_time = now;
+			joystick_direction = 1;
+			if (current_position % 4 == 0) {
+			last_reached_floor = current_position;
+			}
+        }
+		
+    }
+    // Fast downward
+    else if (y_val < JOYSTICK_FAST_LOWER && current_position > FLOOR_0) {
+        if (now - last_move_time > 50) {
+            current_position--;
+            last_move_time = now;
+			joystick_direction = -1;
+			if (current_position % 4 == 0) {
+			last_reached_floor = current_position;
+			}
+        }
+		
+    }
+    // Slow downward
+    else if (y_val < JOYSTICK_SLOW_LOWER && y_val >= JOYSTICK_FAST_LOWER && current_position > FLOOR_0) {
+        if (now - last_move_time > 200) {
+            current_position--;
+            last_move_time = now;
+			joystick_direction = -1;
+			if (current_position % 4 == 0) {
+			last_reached_floor = current_position;
+			}
+		}
+    }
+}
+
+
 void start_screen(void) {
 	// Clear terminal screen and output a message
 	clear_terminal();
@@ -218,18 +307,6 @@ void start_screen(void) {
 */
 
 //the function for showing the direction by the segment of SSD
-void SSD_direction (char segment){
-	PORTC &= ~((1<<PC0)| (1<<PC3) | (1<<PC6));//set to off the SSD first then it can on by the order
-	PORTC |= (1<<PC7); //set to off the SSD first then it can on by the order
-	if (segment == 'a'){
-		PORTC |= (1<<PC0);
-	}else if(segment == 'd'){
-		PORTC |= (1<<PC3);
-	}else if (segment == 'g') {
-        PORTC |= (1 << PC6);
-	}
-}
-
 
 void start_elevator_emulator(void) {
 
@@ -254,10 +331,21 @@ void start_elevator_emulator(void) {
 	current_position = FLOOR_0;
 	destination = FLOOR_0;
 	uint16_t move_delay_ms = 200;
-	static uint8_t digit = 0;
 	uint8_t current_floor = current_position / 4;
 	uint8_t previous_floor = current_floor;
 	while(true) {
+
+		joystick_mode = (PIND & (1 << PD7));
+
+			if (joystick_mode) {
+				joy_service();
+				draw_elevator();
+				move_terminal_cursor(10, 11);
+				printf_P(PSTR("Joystick mode: YES "));
+				continue;
+			}
+
+
 
 		//changing the speed by S2
 		if(PIND & (1 << PD5)){
@@ -267,14 +355,16 @@ void start_elevator_emulator(void) {
 		}
 
 		// Only update the elevator every 200 ms
-		if (get_current_time() - time_since_move > move_delay_ms) {	
-
-			// Adjust the elevator based on where it needs to go
-			if (destination - current_position > 0) { // Move up
+		if (joystick_mode) {
+			update_joystick();
+			} else if (get_current_time() - time_since_move > move_delay_ms) {
+			// 正常模式：destination 控制
+			if (destination > current_position) {
 				current_position++;
-			} else if (destination - current_position < 0) { // Move down
+			} else if (destination < current_position) {
 				current_position--;
 			}
+		
 
 			//terminal display 2
 			current_floor = current_position / 4;
@@ -340,43 +430,10 @@ void start_elevator_emulator(void) {
 		}
 
 		// Handle any button or key inputs
+		if (joystick_mode) return;
 		handle_inputs();
 		// Determine direction and call SSD_direction with appropriate argument
-		
-	
 
-
-		DDRD = 1 << 6;
-		//ssd display#2
-		if(TIFR2 &= (1<<OCF2A)){
-			TIFR2 |= (1 << OCF2A);
-			PORTC = 0;
-			PORTD &= ~(1 << PD6);
-
-			if (digit == 0){
-				PORTD &= ~(1 << PD6);
-				uint8_t floor = last_reached_floor /4;
-				uint8_t seg = seven_seg[floor];
-				if (current_position != FLOOR_0 && current_position != FLOOR_1 &&
-					current_position != FLOOR_2 && current_position != FLOOR_3) {
-					seg |= SEG_DP;
-				}
-				PORTC = seg;
-				
-			} else {
-				PORTD |= (1 << PD6); 
-				uint8_t seg = 0;
-				if (destination > current_position) {
-					seg = (1 << PC0);
-				} else if (destination < current_position) {
-					seg = (1 << PC3);
-				} else {
-					seg = (1 << PC6);
-				}
-				PORTC = seg;		
-			}
-			digit = 1 - digit;
-		}
 	}
 }
 
@@ -485,6 +542,7 @@ void draw_elevator(void) {
 		}
 	}
 }
+
 
 
 
