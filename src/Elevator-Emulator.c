@@ -44,7 +44,7 @@ bool traveller_picked = false;
 //joystick
 bool joystick_mode = false;
 int8_t joystick_direction = 0;
-
+uint8_t previous_floor_joystick = 0;
 
 ElevatorFloor traveller_floor = UNDEF_FLOOR;
 ElevatorFloor traveller_dest = UNDEF_FLOOR;
@@ -52,6 +52,7 @@ uint8_t with_traveller = 0;
 uint8_t without_traveller = 0;
 uint8_t seven_seg[10] = { 63,6,91,79,102,109,125,7,127,111};
 ElevatorFloor last_reached_floor = FLOOR_0; 
+
 
 uint16_t freq_to_clock_period(uint16_t freq){
 	return (1000000UL / freq);
@@ -67,6 +68,24 @@ uint16_t y_val;
 #define JOYSTICK_FAST_UPPER   800
 #define JOYSTICK_SLOW_LOWER   400
 #define JOYSTICK_FAST_LOWER   200
+
+//traveller queue
+#define max_queue 10
+typedef struct {
+	ElevatorFloor from;
+	ElevatorFloor to;
+	uint8_t colour;
+}travellers;
+
+traveller_queue [max_queue];
+uint8_t queue_head = 0;
+uint8_t queue_tail = 0;
+uint8_t queue_size = 0;
+
+travellers current_traveller;
+bool pick_up = true;
+
+
 
 
 
@@ -178,6 +197,7 @@ void initialise_hardware(void) {
 void joy_service(void) {//set up ADC
 	static uint32_t last_move_time = 0;
 	uint32_t now = get_current_time();
+	uint8_t current_floor = current_position / 4;
 	ADMUX = (1 << REFS0) | (1 << MUX2);
 	ADCSRA |= (1 << ADSC);  
 	while(ADCSRA & (1<<ADSC)) {
@@ -193,6 +213,7 @@ void joy_service(void) {//set up ADC
 	if (y_val > JOYSTICK_FAST_UPPER && current_position < FLOOR_3) {
         if (now - last_move_time > 50) { // 50ms delay for fast
             current_position++;
+			traveller_picked = false;
             last_move_time = now;
 			joystick_direction = 1;
 			if (current_position % 4 == 0) {
@@ -204,6 +225,7 @@ void joy_service(void) {//set up ADC
     else if (y_val > JOYSTICK_SLOW_UPPER && y_val <= JOYSTICK_FAST_UPPER && current_position < FLOOR_3) {
         if (now - last_move_time > 200) { // 200ms delay for slow
             current_position++;
+			traveller_picked = false;
             last_move_time = now;
 			joystick_direction = 1;
 			if (current_position % 4 == 0) {
@@ -216,6 +238,7 @@ void joy_service(void) {//set up ADC
     else if (y_val < JOYSTICK_FAST_LOWER && current_position > FLOOR_0) {
         if (now - last_move_time > 50) {
             current_position--;
+			traveller_picked = false;
             last_move_time = now;
 			joystick_direction = -1;
 			if (current_position % 4 == 0) {
@@ -228,6 +251,7 @@ void joy_service(void) {//set up ADC
     else if (y_val < JOYSTICK_SLOW_LOWER && y_val >= JOYSTICK_FAST_LOWER && current_position > FLOOR_0) {
         if (now - last_move_time > 200) {
             current_position--;
+			traveller_picked = false;
             last_move_time = now;
 			joystick_direction = -1;
 			if (current_position % 4 == 0) {
@@ -237,6 +261,18 @@ void joy_service(void) {//set up ADC
     }else{
 		joystick_direction = 0;
 	}
+
+	current_floor = current_position / 4;
+	if (current_floor != previous_floor_joystick) {
+		if (traveller_picked) { // use traveller picked up instead
+			with_traveller++;
+		} else {
+			without_traveller++;
+		}
+		previous_floor_joystick = current_floor;
+	}
+	move_terminal_cursor(10, 18);
+	printf_P(PSTR("Number of floors without traveller: %d"), without_traveller);
 }
 
 
@@ -342,7 +378,7 @@ void start_elevator_emulator(void) {
 				joy_service();
 				draw_elevator();
 				move_terminal_cursor(10, 11);
-				printf_P(PSTR("Joystick mode: YES "));
+				printf_P(PSTR("Joystick mode: YES "));//debug
 				continue;
 			}
 
@@ -495,6 +531,10 @@ void door_animation(void){
 
 	PORTA &= ~((1<< PA0)| (1<<PA1) | (1<<PA2) |(1<<PA3));
 }
+
+//traveller queue
+//traveller queue up
+
 
 // If a traveller is dropped off at the floor 
 //where the next traveller is waiting (assuming “Travel Queue” is implemented),
